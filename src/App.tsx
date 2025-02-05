@@ -3,17 +3,22 @@ import { Toaster } from "sonner"
 import Index from "@/pages/Index"
 import NotFound from "@/pages/NotFound"
 import AddClient from "@/pages/AddClient"
+import { SidebarProvider } from "@/components/ui/sidebar"
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Index />} />
-        <Route path="/add-client" element={<AddClient />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-      <Toaster />
-    </Router>
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full">
+        <Router>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/add-client" element={<AddClient />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+          <Toaster />
+        </Router>
+      </div>
+    </SidebarProvider>
   )
 }
 
