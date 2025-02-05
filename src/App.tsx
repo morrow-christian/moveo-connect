@@ -4,6 +4,7 @@ import Index from "@/pages/Index"
 import NotFound from "@/pages/NotFound"
 import AddClient from "@/pages/AddClient"
 import Clients from "@/pages/Clients"
+import Schedule from "@/pages/Schedule"
 import { SidebarProvider } from "@/components/ui/sidebar"
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
             <Route path="/" element={<Index />} />
             <Route path="/clients" element={<Clients />} />
             <Route path="/add-client" element={<AddClient />} />
+            <Route path="/schedule" element={<Schedule />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <Toaster />
