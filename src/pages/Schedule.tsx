@@ -3,28 +3,44 @@ import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { supabase } from "@/integrations/supabase/client"
+import { format } from "date-fns"
+import { toast } from "sonner"
+import { useQuery } from "@tanstack/react-query"
 
-// Temporary mock data
-const upcomingMoves = [
-  {
-    id: 1,
-    clientName: "John Smith",
-    date: "2024-03-15",
-    type: "Move Out",
-    address: "123 Main St, Anytown, USA",
-  },
-  {
-    id: 2,
-    clientName: "Sarah Johnson",
-    date: "2024-03-20",
-    type: "Move In",
-    address: "456 Oak Ave, Somewhere, USA",
-  },
-]
+async function fetchMoves() {
+  const { data, error } = await supabase
+    .from("moves")
+    .select(`
+      *,
+      clients (
+        first_name,
+        last_name
+      )
+    `)
+    .order("start_date", { ascending: true })
+
+  if (error) {
+    throw error
+  }
+
+  return data
+}
 
 export default function Schedule() {
   const [date, setDate] = useState<Date | undefined>(new Date())
+  
+  const { data: moves, isLoading, error } = useQuery({
+    queryKey: ["moves"],
+    queryFn: fetchMoves,
+  })
+
+  useEffect(() => {
+    if (error) {
+      toast.error("Failed to load moves")
+    }
+  }, [error])
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -62,17 +78,29 @@ export default function Schedule() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {upcomingMoves.map((move) => (
-                  <div
-                    key={move.id}
-                    className="rounded-lg border p-4 hover:bg-gray-50"
-                  >
-                    <div className="font-medium">{move.clientName}</div>
-                    <div className="text-sm text-gray-500">{move.date}</div>
-                    <div className="text-sm text-gray-500">{move.type}</div>
-                    <div className="text-sm text-gray-500">{move.address}</div>
-                  </div>
-                ))}
+                {isLoading ? (
+                  <p className="text-sm text-gray-500">Loading moves...</p>
+                ) : moves && moves.length > 0 ? (
+                  moves.map((move) => (
+                    <div
+                      key={move.id}
+                      className="rounded-lg border p-4 hover:bg-gray-50"
+                    >
+                      <div className="font-medium">
+                        {move.clients.first_name} {move.clients.last_name}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {format(new Date(move.start_date), "PPP")}
+                      </div>
+                      <div className="text-sm text-gray-500">{move.move_type}</div>
+                      <div className="text-sm text-gray-500">
+                        {move.from_address}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500">No moves scheduled</p>
+                )}
               </div>
             </CardContent>
           </Card>
