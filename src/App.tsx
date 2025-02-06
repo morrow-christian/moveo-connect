@@ -7,6 +7,7 @@ import NotFound from "@/pages/NotFound"
 import AddClient from "@/pages/AddClient"
 import Clients from "@/pages/Clients"
 import Schedule from "@/pages/Schedule"
+import Settings from "@/pages/Settings"
 import Auth from "@/pages/Auth"
 import { SidebarProvider } from "@/components/ui/sidebar"
 
@@ -75,6 +76,16 @@ function App() {
               element={
                 session ? (
                   <Schedule />
+                ) : (
+                  <Navigate to="/auth" replace />
+                )
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                session ? (
+                  <Settings />
                 ) : (
                   <Navigate to="/auth" replace />
                 )
