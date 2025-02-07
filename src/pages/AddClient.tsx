@@ -76,6 +76,10 @@ export default function AddClient() {
       }
 
       // Create a move record for this client
+      const moveStartDate = new Date(data.moveDate)
+      const moveEndDate = new Date(moveStartDate)
+      moveEndDate.setDate(moveEndDate.getDate() + 1) // Set end date to the next day by default
+
       const { error: moveError } = await supabase.from("moves").insert({
         client_id: (await supabase
           .from("clients")
@@ -87,7 +91,8 @@ export default function AddClient() {
         user_id: user.id,
         from_address: data.currentAddress,
         to_address: data.moveToAddress,
-        start_date: new Date(data.moveDate).toISOString(),
+        start_date: moveStartDate.toISOString(),
+        end_date: moveEndDate.toISOString(), // Add the end_date field
         move_type: "residential",
         status: "pending",
         title: `Move for ${data.firstName} ${data.lastName}`,
