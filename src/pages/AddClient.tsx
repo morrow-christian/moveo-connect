@@ -1,3 +1,4 @@
+
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -14,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { useNavigate } from "react-router-dom"
+import { supabase } from "@/integrations/supabase/client"
 
 const clientFormSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
@@ -46,10 +48,63 @@ export default function AddClient() {
     defaultValues,
   })
 
-  function onSubmit(data: ClientFormValues) {
-    toast.success("Client added successfully!")
-    console.log(data)
-    navigate("/")
+  async function onSubmit(data: ClientFormValues) {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        toast.error("You must be logged in to add clients")
+        return
+      }
+
+      const { error } = await supabase.from("clients").insert({
+        first_name: data.firstName,
+        last_name: data.lastName,
+        email: data.email,
+        phone: data.phone,
+        address: data.currentAddress,
+        notes: data.notes,
+        user_id: user.id,
+      })
+
+      if (error) {
+        toast.error("Error adding client")
+        console.error("Error adding client:", error)
+        return
+      }
+
+      // Create a move record for this client
+      const { error: moveError } = await supabase.from("moves").insert({
+        client_id: (await supabase
+          .from("clients")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("first_name", data.firstName)
+          .eq("last_name", data.lastName)
+          .single()).data?.id,
+        user_id: user.id,
+        from_address: data.currentAddress,
+        to_address: data.moveToAddress,
+        start_date: new Date(data.moveDate).toISOString(),
+        move_type: "residential",
+        status: "pending",
+        title: `Move for ${data.firstName} ${data.lastName}`,
+      })
+
+      if (moveError) {
+        toast.error("Error creating move record")
+        console.error("Error creating move:", moveError)
+        return
+      }
+
+      toast.success("Client added successfully!")
+      navigate("/clients")
+    } catch (error) {
+      console.error("Error:", error)
+      toast.error("An unexpected error occurred")
+    }
   }
 
   return (
@@ -179,7 +234,7 @@ export default function AddClient() {
             />
 
             <div className="flex justify-end space-x-4">
-              <Button variant="outline" type="button" onClick={() => navigate("/")}>
+              <Button variant="outline" type="button" onClick={() => navigate("/clients")}>
                 Cancel
               </Button>
               <Button type="submit">Add Client</Button>
