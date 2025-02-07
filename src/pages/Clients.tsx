@@ -1,5 +1,4 @@
 
-import { AppSidebar } from "@/components/AppSidebar"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -16,6 +15,7 @@ import { useQuery } from "@tanstack/react-query"
 import { supabase } from "@/integrations/supabase/client"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
+import { AppLayout } from "@/components/AppLayout"
 
 export default function Clients() {
   const navigate = useNavigate()
@@ -38,9 +38,8 @@ export default function Clients() {
   })
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <AppSidebar />
-      <main className="flex-1 overflow-auto p-8">
+    <AppLayout>
+      <div className="container mx-auto p-8">
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Clients</h1>
@@ -110,7 +109,7 @@ export default function Clients() {
             </TableBody>
           </Table>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   )
 }
