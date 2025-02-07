@@ -1,3 +1,4 @@
+
 import { AppSidebar } from "@/components/AppSidebar"
 import { Button } from "@/components/ui/button"
 import {
@@ -10,29 +11,32 @@ import {
 } from "@/components/ui/table"
 import { UserPlus, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { Link } from "react-router-dom"
-
-// Temporary mock data
-const clients = [
-  {
-    id: 1,
-    name: "John Smith",
-    email: "john.smith@example.com",
-    phone: "(555) 123-4567",
-    moveDate: "2024-03-15",
-    status: "Active",
-  },
-  {
-    id: 2,
-    name: "Sarah Johnson",
-    email: "sarah.j@example.com",
-    phone: "(555) 987-6543",
-    moveDate: "2024-03-20",
-    status: "Pending",
-  },
-]
+import { Link, useNavigate } from "react-router-dom"
+import { useQuery } from "@tanstack/react-query"
+import { supabase } from "@/integrations/supabase/client"
+import { Skeleton } from "@/components/ui/skeleton"
+import { toast } from "sonner"
 
 export default function Clients() {
+  const navigate = useNavigate()
+
+  const { data: clients, isLoading } = useQuery({
+    queryKey: ["clients"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("*")
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        toast.error("Error loading clients")
+        throw error
+      }
+
+      return data
+    },
+  })
+
   return (
     <div className="flex h-screen bg-gray-100">
       <AppSidebar />
@@ -67,32 +71,38 @@ export default function Clients() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
-                <TableHead>Move Date</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Address</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {clients.length > 0 ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={4}>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-full" />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : clients && clients.length > 0 ? (
                 clients.map((client) => (
-                  <TableRow key={client.id}>
-                    <TableCell className="font-medium">{client.name}</TableCell>
-                    <TableCell>{client.email}</TableCell>
-                    <TableCell>{client.phone}</TableCell>
-                    <TableCell>{client.moveDate}</TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                        client.status === "Active" 
-                          ? "bg-green-100 text-green-700" 
-                          : "bg-yellow-100 text-yellow-700"
-                      }`}>
-                        {client.status}
-                      </span>
+                  <TableRow 
+                    key={client.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => navigate(`/clients/${client.id}`)}
+                  >
+                    <TableCell className="font-medium">
+                      {client.first_name} {client.last_name}
                     </TableCell>
+                    <TableCell>{client.email || "—"}</TableCell>
+                    <TableCell>{client.phone || "—"}</TableCell>
+                    <TableCell>{client.address || "—"}</TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center">
+                  <TableCell colSpan={4} className="text-center">
                     No clients found
                   </TableCell>
                 </TableRow>

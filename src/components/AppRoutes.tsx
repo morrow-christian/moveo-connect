@@ -2,6 +2,7 @@
 import { Routes, Route, Navigate } from "react-router-dom"
 import Index from "@/pages/Index"
 import Clients from "@/pages/Clients"
+import ClientDetails from "@/pages/ClientDetails"
 import AddClient from "@/pages/AddClient"
 import Schedule from "@/pages/Schedule"
 import Settings from "@/pages/Settings"
@@ -25,6 +26,12 @@ export function AppRoutes({ session }: AppRoutesProps) {
         path="/clients"
         element={
           session ? <Clients /> : <Navigate to="/auth" replace />
+        }
+      />
+      <Route
+        path="/clients/:id"
+        element={
+          session ? <ClientDetails /> : <Navigate to="/auth" replace />
         }
       />
       <Route
