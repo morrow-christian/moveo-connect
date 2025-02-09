@@ -1,3 +1,4 @@
+
 import { Home, Users, Calendar, Settings } from "lucide-react";
 import {
   Sidebar,
@@ -20,20 +21,23 @@ const menuItems = [
 
 export function AppSidebar() {
   return (
-    <Sidebar>
+    <Sidebar className="border-r bg-white">
       <SidebarContent>
-        <div className="p-4">
-          <h1 className="text-2xl font-bold text-primary">Moveo</h1>
-          <p className="text-sm text-gray-500">Senior Move Manager CRM</p>
+        <div className="p-6">
+          <h1 className="text-3xl font-bold text-blue-600">Moveo</h1>
+          <p className="text-gray-600">Senior Move Manager CRM</p>
         </div>
         <SidebarGroup>
-          <SidebarGroupLabel>Menu</SidebarGroupLabel>
+          <SidebarGroupLabel className="px-6">Menu</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <Link to={item.path} className="flex items-center gap-2">
+                    <Link 
+                      to={item.path} 
+                      className="flex items-center gap-3 px-6 py-2 text-gray-700 hover:bg-gray-100"
+                    >
                       <item.icon className="h-5 w-5" />
                       <span>{item.title}</span>
                     </Link>
@@ -45,5 +49,5 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
     </Sidebar>
-  );
+  )
 }
