@@ -1,11 +1,12 @@
 
 import { Card } from "@/components/ui/card";
 import { Users, Calendar, CheckCircle } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { AppLayout } from "@/components/AppLayout";
 import { toast } from "sonner";
+import { useEffect } from "react";
 
 async function fetchDashboardData() {
   const { data: moves, error: movesError } = await supabase
@@ -39,10 +40,53 @@ async function fetchDashboardData() {
 }
 
 const Dashboard = () => {
+  const queryClient = useQueryClient();
+  
   const { data, isLoading, error } = useQuery({
     queryKey: ["dashboard"],
     queryFn: fetchDashboardData,
   });
+
+  useEffect(() => {
+    // Subscribe to changes in the clients table
+    const clientsChannel = supabase
+      .channel('public:clients')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'clients'
+        },
+        () => {
+          // Invalidate and refetch dashboard data
+          queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        }
+      )
+      .subscribe();
+
+    // Subscribe to changes in the moves table
+    const movesChannel = supabase
+      .channel('public:moves')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'moves'
+        },
+        () => {
+          // Invalidate and refetch dashboard data
+          queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(clientsChannel);
+      supabase.removeChannel(movesChannel);
+    };
+  }, [queryClient]);
 
   if (error) {
     toast.error("Failed to load dashboard data");
