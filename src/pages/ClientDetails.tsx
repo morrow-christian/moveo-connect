@@ -1,6 +1,4 @@
-
 import { useParams } from "react-router-dom"
-import { AppSidebar } from "@/components/AppSidebar"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/integrations/supabase/client"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -10,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { AppLayout } from "@/components/AppLayout"
 
 export default function ClientDetails() {
   const { id } = useParams()
@@ -90,34 +89,31 @@ export default function ClientDetails() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen bg-gray-100">
-        <AppSidebar />
-        <main className="flex-1 overflow-auto p-8">
+      <AppLayout>
+        <div className="p-8">
           <Skeleton className="h-8 w-1/3 mb-4" />
           <div className="grid gap-6">
             <Skeleton className="h-[200px]" />
             <Skeleton className="h-[200px]" />
           </div>
-        </main>
-      </div>
+        </div>
+      </AppLayout>
     )
   }
 
   if (!client) {
     return (
-      <div className="flex h-screen bg-gray-100">
-        <AppSidebar />
-        <main className="flex-1 overflow-auto p-8">
+      <AppLayout>
+        <div className="p-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-8">Client Not Found</h1>
-        </main>
-      </div>
+        </div>
+      </AppLayout>
     )
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <AppSidebar />
-      <main className="flex-1 overflow-auto p-8">
+    <AppLayout>
+      <div className="p-8">
         <div className="mb-8 flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
@@ -264,7 +260,7 @@ export default function ClientDetails() {
             </div>
           )}
         </form>
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   )
 }

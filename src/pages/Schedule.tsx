@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client"
 import { format } from "date-fns"
 import { toast } from "sonner"
 import { useQuery } from "@tanstack/react-query"
+import { AppLayout } from "@/components/AppLayout"
 
 async function fetchMoves() {
   const { data, error } = await supabase
@@ -43,9 +44,8 @@ export default function Schedule() {
   }, [error])
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <AppSidebar />
-      <main className="flex-1 overflow-auto p-8">
+    <AppLayout>
+      <div className="p-8">
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Schedule</h1>
@@ -105,7 +105,7 @@ export default function Schedule() {
             </CardContent>
           </Card>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   )
 }
