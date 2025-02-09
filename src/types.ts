@@ -1,6 +1,6 @@
 
 export interface Move {
-  id: number;
+  id: string;
   created_at: string;
   start_date: string;
   status: string;
