@@ -42,13 +42,16 @@ export function MoveDialog({ mode, move, trigger, onComplete }: MoveDialogProps)
     setLoading(true)
 
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("No user found")
+
       if (mode === "create") {
-        const { error } = await supabase.from("moves").insert([
-          {
-            ...formData,
-            client_id: move?.client_id,
-          },
-        ])
+        const { error } = await supabase.from("moves").insert({
+          ...formData,
+          client_id: move?.client_id,
+          user_id: user.id,
+          status: 'pending'
+        })
         if (error) throw error
         toast.success("Move created successfully")
       } else {
