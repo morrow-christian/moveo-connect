@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, Pencil, Trash2, Search } from "lucide-react"
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { supabase } from "@/integrations/supabase/client"
-import { format } from "date-fns"
+import { format, isSameDay } from "date-fns"
 import { toast } from "sonner"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Move } from "@/types"
@@ -30,6 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 
 type SortField = "date" | "name" | "type"
 type SortOrder = "asc" | "desc"
@@ -59,10 +64,11 @@ export default function Schedule() {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [sortField, setSortField] = useState<SortField>("date")
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc")
+  const [draggedMoveId, setDraggedMoveId] = useState<string | null>(null)
   
   const queryClient = useQueryClient()
   
-  const { data: moves, isLoading, error } = useQuery({
+  const { data: moves, isLoading } = useQuery({
     queryKey: ["moves"],
     queryFn: fetchMoves,
   })
@@ -77,6 +83,32 @@ export default function Schedule() {
       toast.error(error.message)
     }
   }
+
+  const handleDateChange = async (newDate: Date | undefined, moveId: string) => {
+    if (!newDate || !moveId) return
+
+    try {
+      const { error } = await supabase
+        .from("moves")
+        .update({ start_date: newDate.toISOString() })
+        .eq("id", moveId)
+
+      if (error) throw error
+      queryClient.invalidateQueries({ queryKey: ["moves"] })
+      toast.success("Move date updated successfully")
+    } catch (error: any) {
+      toast.error(error.message)
+    }
+  }
+
+  const moveDates = useMemo(() => {
+    return moves?.map(move => new Date(move.start_date)) || []
+  }, [moves])
+
+  const movesForSelectedDate = useMemo(() => {
+    if (!date || !moves) return []
+    return moves.filter(move => isSameDay(new Date(move.start_date), date))
+  }, [date, moves])
 
   const filteredAndSortedMoves = moves
     ?.filter((move) => {
@@ -136,12 +168,54 @@ export default function Schedule() {
               <CardTitle>Calendar</CardTitle>
             </CardHeader>
             <CardContent>
-              <Calendar
-                mode="single"
-                selected={date}
-                onSelect={setDate}
-                className="rounded-md border"
-              />
+              <div className="relative">
+                <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={setDate}
+                  className="rounded-md border"
+                  modifiers={{
+                    booked: moveDates,
+                  }}
+                  modifiersStyles={{
+                    booked: {
+                      fontWeight: "bold",
+                      backgroundColor: "rgb(59 130 246 / 0.1)",
+                      color: "rgb(59 130 246)",
+                    }
+                  }}
+                  onDayClick={(day) => setDate(day)}
+                />
+                {movesForSelectedDate.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <div className="absolute top-0 right-0 p-4">
+                        <div className="bg-blue-100 text-blue-700 rounded-full px-2 py-1 text-sm font-medium">
+                          {movesForSelectedDate.length} moves
+                        </div>
+                      </div>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80">
+                      <div className="space-y-2">
+                        <h4 className="font-medium">
+                          Moves on {date && format(date, "PPP")}
+                        </h4>
+                        {movesForSelectedDate.map((move) => (
+                          <div
+                            key={move.id}
+                            className="text-sm p-2 border rounded hover:bg-gray-50"
+                          >
+                            <div className="font-medium">
+                              {move.clients.first_name} {move.clients.last_name}
+                            </div>
+                            <div className="text-gray-500">{move.move_type}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -212,7 +286,13 @@ export default function Schedule() {
                   filteredAndSortedMoves.map((move) => (
                     <div
                       key={move.id}
-                      className="flex items-center justify-between rounded-lg border p-4 hover:bg-gray-50"
+                      className="flex items-center justify-between rounded-lg border p-4 hover:bg-gray-50 cursor-move"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("moveId", move.id)
+                        setDraggedMoveId(move.id)
+                      }}
+                      onDragEnd={() => setDraggedMoveId(null)}
                     >
                       <div>
                         <div className="font-medium">
