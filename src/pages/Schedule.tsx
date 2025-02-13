@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/AppLayout"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, Pencil, Trash2 } from "lucide-react"
+import { Plus, Pencil, Trash2, Search } from "lucide-react"
 import { useState } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { format } from "date-fns"
@@ -22,6 +22,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+
+type SortField = "date" | "name" | "type"
+type SortOrder = "asc" | "desc"
 
 async function fetchMoves() {
   const { data, error } = await supabase
@@ -44,6 +55,11 @@ async function fetchMoves() {
 
 export default function Schedule() {
   const [date, setDate] = useState<Date | undefined>(new Date())
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [sortField, setSortField] = useState<SortField>("date")
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc")
+  
   const queryClient = useQueryClient()
   
   const { data: moves, isLoading, error } = useQuery({
@@ -61,6 +77,39 @@ export default function Schedule() {
       toast.error(error.message)
     }
   }
+
+  const filteredAndSortedMoves = moves
+    ?.filter((move) => {
+      const matchesSearch =
+        searchQuery === "" ||
+        move.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        move.move_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        move.clients.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        move.clients.last_name.toLowerCase().includes(searchQuery.toLowerCase())
+
+      const matchesStatus =
+        statusFilter === "all" || move.status === statusFilter
+
+      return matchesSearch && matchesStatus
+    })
+    .sort((a, b) => {
+      let compareResult = 0
+      
+      switch (sortField) {
+        case "date":
+          compareResult = new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+          break
+        case "name":
+          compareResult = (a.clients.first_name + a.clients.last_name)
+            .localeCompare(b.clients.first_name + b.clients.last_name)
+          break
+        case "type":
+          compareResult = a.move_type.localeCompare(b.move_type)
+          break
+      }
+
+      return sortOrder === "asc" ? compareResult : -compareResult
+    })
 
   return (
     <AppLayout>
@@ -102,10 +151,65 @@ export default function Schedule() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
+                <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search moves..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                    <Select
+                      value={statusFilter}
+                      onValueChange={(value) => setStatusFilter(value)}
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Filter by status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="in-progress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-2">
+                    <Select
+                      value={sortField}
+                      onValueChange={(value) => setSortField(value as SortField)}
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Sort by" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="date">Date</SelectItem>
+                        <SelectItem value="name">Client Name</SelectItem>
+                        <SelectItem value="type">Move Type</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={sortOrder}
+                      onValueChange={(value) => setSortOrder(value as SortOrder)}
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Sort order" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="asc">Ascending</SelectItem>
+                        <SelectItem value="desc">Descending</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 {isLoading ? (
                   <p className="text-sm text-gray-500">Loading moves...</p>
-                ) : moves && moves.length > 0 ? (
-                  moves.map((move) => (
+                ) : filteredAndSortedMoves && filteredAndSortedMoves.length > 0 ? (
+                  filteredAndSortedMoves.map((move) => (
                     <div
                       key={move.id}
                       className="flex items-center justify-between rounded-lg border p-4 hover:bg-gray-50"
@@ -120,6 +224,15 @@ export default function Schedule() {
                         <div className="text-sm text-gray-500">{move.move_type}</div>
                         <div className="text-sm text-gray-500">
                           {move.from_address}
+                        </div>
+                        <div className="mt-1">
+                          <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium
+                            ${move.status === 'completed' ? 'bg-green-100 text-green-700' :
+                              move.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+                                'bg-yellow-100 text-yellow-700'
+                            }`}>
+                            {move.status}
+                          </span>
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -159,7 +272,7 @@ export default function Schedule() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-gray-500">No moves scheduled</p>
+                  <p className="text-sm text-gray-500">No moves found</p>
                 )}
               </div>
             </CardContent>
