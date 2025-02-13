@@ -1,14 +1,27 @@
-import { AppSidebar } from "@/components/AppSidebar"
+
+import { AppLayout } from "@/components/AppLayout"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus } from "lucide-react"
-import { useState, useEffect } from "react"
+import { Plus, Pencil, Trash2 } from "lucide-react"
+import { useState } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { format } from "date-fns"
 import { toast } from "sonner"
-import { useQuery } from "@tanstack/react-query"
-import { AppLayout } from "@/components/AppLayout"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { Move } from "@/types"
+import { MoveDialog } from "@/components/moves/MoveDialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 async function fetchMoves() {
   const { data, error } = await supabase
@@ -26,22 +39,28 @@ async function fetchMoves() {
     throw error
   }
 
-  return data
+  return data as Move[]
 }
 
 export default function Schedule() {
   const [date, setDate] = useState<Date | undefined>(new Date())
+  const queryClient = useQueryClient()
   
   const { data: moves, isLoading, error } = useQuery({
     queryKey: ["moves"],
     queryFn: fetchMoves,
   })
 
-  useEffect(() => {
-    if (error) {
-      toast.error("Failed to load moves")
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await supabase.from("moves").delete().eq("id", id)
+      if (error) throw error
+      queryClient.invalidateQueries({ queryKey: ["moves"] })
+      toast.success("Move deleted successfully")
+    } catch (error: any) {
+      toast.error(error.message)
     }
-  }, [error])
+  }
 
   return (
     <AppLayout>
@@ -51,10 +70,15 @@ export default function Schedule() {
             <h1 className="text-3xl font-bold text-gray-900">Schedule</h1>
             <p className="text-gray-500">Manage moves and appointments</p>
           </div>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Event
-          </Button>
+          <MoveDialog
+            mode="create"
+            trigger={
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Event
+              </Button>
+            }
+          />
         </div>
 
         <div className="grid gap-6 md:grid-cols-[1fr_300px]">
@@ -84,17 +108,53 @@ export default function Schedule() {
                   moves.map((move) => (
                     <div
                       key={move.id}
-                      className="rounded-lg border p-4 hover:bg-gray-50"
+                      className="flex items-center justify-between rounded-lg border p-4 hover:bg-gray-50"
                     >
-                      <div className="font-medium">
-                        {move.clients.first_name} {move.clients.last_name}
+                      <div>
+                        <div className="font-medium">
+                          {move.clients.first_name} {move.clients.last_name}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {format(new Date(move.start_date), "PPP")}
+                        </div>
+                        <div className="text-sm text-gray-500">{move.move_type}</div>
+                        <div className="text-sm text-gray-500">
+                          {move.from_address}
+                        </div>
                       </div>
-                      <div className="text-sm text-gray-500">
-                        {format(new Date(move.start_date), "PPP")}
-                      </div>
-                      <div className="text-sm text-gray-500">{move.move_type}</div>
-                      <div className="text-sm text-gray-500">
-                        {move.from_address}
+                      <div className="flex gap-2">
+                        <MoveDialog
+                          mode="edit"
+                          move={move}
+                          trigger={
+                            <Button variant="ghost" size="icon">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          }
+                        />
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Move</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this move? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDelete(move.id)}
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </div>
                   ))
