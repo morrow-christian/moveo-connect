@@ -14,6 +14,13 @@ import { supabase } from "@/integrations/supabase/client"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Move } from "@/types"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface MoveDialogProps {
   mode: "create" | "edit"
@@ -35,6 +42,7 @@ export function MoveDialog({ mode, move, trigger, onComplete }: MoveDialogProps)
     from_address: move?.from_address || "",
     to_address: move?.to_address || "",
     description: move?.description || "",
+    status: move?.status || "pending"
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,7 +58,7 @@ export function MoveDialog({ mode, move, trigger, onComplete }: MoveDialogProps)
           ...formData,
           client_id: move?.client_id,
           user_id: user.id,
-          status: 'pending'
+          status: formData.status
         })
         if (error) throw error
         toast.success("Move created successfully")
@@ -106,6 +114,24 @@ export function MoveDialog({ mode, move, trigger, onComplete }: MoveDialogProps)
               }
               required
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="status">Status</Label>
+            <Select
+              value={formData.status}
+              onValueChange={(value) =>
+                setFormData({ ...formData, status: value })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="in-progress">In Progress</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="start_date">Start Date</Label>
