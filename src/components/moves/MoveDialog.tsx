@@ -58,14 +58,29 @@ export function MoveDialog({ mode, move, parentMoveId, trigger, onComplete }: Mo
       if (!user) throw new Error("No user found")
 
       if (mode === "create") {
+        // If creating a subtask, first fetch the parent move to get its client_id
+        let client_id = move?.client_id
+        
+        if (parentMoveId && !client_id) {
+          const { data: parentMove, error: parentError } = await supabase
+            .from("moves")
+            .select("client_id")
+            .eq("id", parentMoveId)
+            .single()
+            
+          if (parentError) throw parentError
+          client_id = parentMove.client_id
+        }
+
         const { error } = await supabase.from("moves").insert({
           ...formData,
-          client_id: move?.client_id,
+          client_id: client_id,
           user_id: user.id,
           status: formData.status,
           is_subtask: Boolean(parentMoveId),
           parent_move_id: parentMoveId || null
         })
+        
         if (error) throw error
         toast.success(parentMoveId ? "Sub-task created successfully" : "Move created successfully")
       } else {
