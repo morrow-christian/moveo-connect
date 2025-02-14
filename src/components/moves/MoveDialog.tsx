@@ -1,5 +1,5 @@
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { supabase } from "@/integrations/supabase/client"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQueryClient, useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Move } from "@/types"
 import {
@@ -22,6 +22,21 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { differenceInDays } from "date-fns"
+
+interface Client {
+  id: string
+  first_name: string
+  last_name: string
+}
+
+const moveTemplates = [
+  { type: "Local Move", duration: 1 },
+  { type: "Long Distance Move", duration: 3 },
+  { type: "Office Move", duration: 2 },
+  { type: "Storage Move", duration: 1 },
+  { type: "Apartment Move", duration: 1 },
+]
 
 interface MoveDialogProps {
   mode: "create" | "edit"
@@ -46,11 +61,79 @@ export function MoveDialog({ mode, move, parentMoveId, trigger, onComplete }: Mo
     description: move?.description || "",
     status: move?.status || "pending",
     is_subtask: parentMoveId ? true : false,
-    parent_move_id: parentMoveId || null
+    parent_move_id: parentMoveId || null,
+    client_id: move?.client_id || ""
   })
+
+  const { data: clients } = useQuery({
+    queryKey: ["clients"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, first_name, last_name")
+      if (error) throw error
+      return data as Client[]
+    },
+    enabled: !parentMoveId && mode === "create" // Only fetch clients for new main moves
+  })
+
+  const handleTemplateSelection = (templateType: string) => {
+    const template = moveTemplates.find(t => t.type === templateType)
+    if (template && formData.start_date) {
+      const startDate = new Date(formData.start_date)
+      const endDate = new Date(startDate)
+      endDate.setDate(startDate.getDate() + template.duration)
+      
+      setFormData(prev => ({
+        ...prev,
+        move_type: templateType,
+        end_date: endDate.toISOString().split('T')[0]
+      }))
+    }
+  }
+
+  const validateDates = () => {
+    if (!formData.start_date || !formData.end_date) return true
+    const startDate = new Date(formData.start_date)
+    const endDate = new Date(formData.end_date)
+    return startDate <= endDate
+  }
+
+  const handleStartDateChange = (date: string) => {
+    setFormData(prev => {
+      const newData = { ...prev, start_date: date }
+      if (prev.move_type) {
+        const template = moveTemplates.find(t => t.type === prev.move_type)
+        if (template) {
+          const startDate = new Date(date)
+          const endDate = new Date(startDate)
+          endDate.setDate(startDate.getDate() + template.duration)
+          newData.end_date = endDate.toISOString().split('T')[0]
+        }
+      }
+      return newData
+    })
+  }
+
+  const calculateDuration = () => {
+    if (formData.start_date && formData.end_date) {
+      const days = differenceInDays(
+        new Date(formData.end_date),
+        new Date(formData.start_date)
+      )
+      return days + 1
+    }
+    return null
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!validateDates()) {
+      toast.error("End date must be after start date")
+      return
+    }
+    
     setLoading(true)
 
     try {
@@ -58,8 +141,7 @@ export function MoveDialog({ mode, move, parentMoveId, trigger, onComplete }: Mo
       if (!user) throw new Error("No user found")
 
       if (mode === "create") {
-        // If creating a subtask, first fetch the parent move to get its client_id
-        let client_id = move?.client_id
+        let client_id = formData.client_id || move?.client_id
         
         if (parentMoveId && !client_id) {
           const { data: parentMove, error: parentError } = await supabase
@@ -70,6 +152,10 @@ export function MoveDialog({ mode, move, parentMoveId, trigger, onComplete }: Mo
             
           if (parentError) throw parentError
           client_id = parentMove.client_id
+        }
+
+        if (!client_id && !parentMoveId) {
+          throw new Error("Please select a client")
         }
 
         const { error } = await supabase.from("moves").insert({
@@ -117,6 +203,29 @@ export function MoveDialog({ mode, move, parentMoveId, trigger, onComplete }: Mo
         </DialogHeader>
         <ScrollArea className="flex-1 px-1">
           <form onSubmit={handleSubmit} className="space-y-4">
+            {!parentMoveId && mode === "create" && (
+              <div className="space-y-2">
+                <Label htmlFor="client">Client</Label>
+                <Select
+                  value={formData.client_id}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, client_id: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients?.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.first_name} {client.last_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="title">Title</Label>
@@ -131,16 +240,24 @@ export function MoveDialog({ mode, move, parentMoveId, trigger, onComplete }: Mo
               </div>
               <div className="space-y-2">
                 <Label htmlFor="move_type">Move Type</Label>
-                <Input
-                  id="move_type"
+                <Select
                   value={formData.move_type}
-                  onChange={(e) =>
-                    setFormData({ ...formData, move_type: e.target.value })
-                  }
-                  required
-                />
+                  onValueChange={handleTemplateSelection}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select move type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {moveTemplates.map((template) => (
+                      <SelectItem key={template.type} value={template.type}>
+                        {template.type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
               <Select
@@ -159,6 +276,7 @@ export function MoveDialog({ mode, move, parentMoveId, trigger, onComplete }: Mo
                 </SelectContent>
               </Select>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="start_date">Start Date</Label>
@@ -166,9 +284,7 @@ export function MoveDialog({ mode, move, parentMoveId, trigger, onComplete }: Mo
                   id="start_date"
                   type="date"
                   value={formData.start_date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, start_date: e.target.value })
-                  }
+                  onChange={(e) => handleStartDateChange(e.target.value)}
                   required
                 />
               </div>
@@ -182,9 +298,17 @@ export function MoveDialog({ mode, move, parentMoveId, trigger, onComplete }: Mo
                     setFormData({ ...formData, end_date: e.target.value })
                   }
                   required
+                  min={formData.start_date}
                 />
               </div>
             </div>
+
+            {calculateDuration() && (
+              <div className="text-sm text-gray-500">
+                Duration: {calculateDuration()} day(s)
+              </div>
+            )}
+
             {!formData.is_subtask && (
               <>
                 <div className="space-y-2">
@@ -209,6 +333,7 @@ export function MoveDialog({ mode, move, parentMoveId, trigger, onComplete }: Mo
                 </div>
               </>
             )}
+
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Input
@@ -219,6 +344,7 @@ export function MoveDialog({ mode, move, parentMoveId, trigger, onComplete }: Mo
                 }
               />
             </div>
+
             <div className="flex justify-end gap-2 pt-4">
               <Button
                 type="button"
