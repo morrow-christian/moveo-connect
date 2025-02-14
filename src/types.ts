@@ -11,6 +11,8 @@ export interface Move {
   description: string | null;
   title: string;
   client_id: string;
+  parent_move_id: string | null;
+  is_subtask: boolean;
   clients: {
     first_name: string;
     last_name: string;

@@ -26,11 +26,12 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 interface MoveDialogProps {
   mode: "create" | "edit"
   move?: Move
+  parentMoveId?: string
   trigger?: React.ReactNode
   onComplete?: () => void
 }
 
-export function MoveDialog({ mode, move, trigger, onComplete }: MoveDialogProps) {
+export function MoveDialog({ mode, move, parentMoveId, trigger, onComplete }: MoveDialogProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const queryClient = useQueryClient()
@@ -43,7 +44,9 @@ export function MoveDialog({ mode, move, trigger, onComplete }: MoveDialogProps)
     from_address: move?.from_address || "",
     to_address: move?.to_address || "",
     description: move?.description || "",
-    status: move?.status || "pending"
+    status: move?.status || "pending",
+    is_subtask: parentMoveId ? true : false,
+    parent_move_id: parentMoveId || null
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,17 +62,19 @@ export function MoveDialog({ mode, move, trigger, onComplete }: MoveDialogProps)
           ...formData,
           client_id: move?.client_id,
           user_id: user.id,
-          status: formData.status
+          status: formData.status,
+          is_subtask: Boolean(parentMoveId),
+          parent_move_id: parentMoveId || null
         })
         if (error) throw error
-        toast.success("Move created successfully")
+        toast.success(parentMoveId ? "Sub-task created successfully" : "Move created successfully")
       } else {
         const { error } = await supabase
           .from("moves")
           .update(formData)
           .eq("id", move?.id)
         if (error) throw error
-        toast.success("Move updated successfully")
+        toast.success(move?.is_subtask ? "Sub-task updated successfully" : "Move updated successfully")
       }
 
       queryClient.invalidateQueries({ queryKey: ["moves"] })
@@ -90,7 +95,9 @@ export function MoveDialog({ mode, move, trigger, onComplete }: MoveDialogProps)
       <DialogContent className="sm:max-w-[600px] h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
-            {mode === "create" ? "Create New Move" : "Edit Move"}
+            {mode === "create" 
+              ? (parentMoveId ? "Create New Sub-task" : "Create New Move")
+              : (move?.is_subtask ? "Edit Sub-task" : "Edit Move")}
           </DialogTitle>
         </DialogHeader>
         <ScrollArea className="flex-1 px-1">
@@ -163,26 +170,30 @@ export function MoveDialog({ mode, move, trigger, onComplete }: MoveDialogProps)
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="from_address">From Address</Label>
-              <Input
-                id="from_address"
-                value={formData.from_address}
-                onChange={(e) =>
-                  setFormData({ ...formData, from_address: e.target.value })
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="to_address">To Address</Label>
-              <Input
-                id="to_address"
-                value={formData.to_address}
-                onChange={(e) =>
-                  setFormData({ ...formData, to_address: e.target.value })
-                }
-              />
-            </div>
+            {!formData.is_subtask && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="from_address">From Address</Label>
+                  <Input
+                    id="from_address"
+                    value={formData.from_address}
+                    onChange={(e) =>
+                      setFormData({ ...formData, from_address: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="to_address">To Address</Label>
+                  <Input
+                    id="to_address"
+                    value={formData.to_address}
+                    onChange={(e) =>
+                      setFormData({ ...formData, to_address: e.target.value })
+                    }
+                  />
+                </div>
+              </>
+            )}
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Input

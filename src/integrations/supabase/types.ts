@@ -64,7 +64,9 @@ export type Database = {
           end_date: string
           from_address: string | null
           id: string
+          is_subtask: boolean | null
           move_type: string
+          parent_move_id: string | null
           start_date: string
           status: string
           title: string
@@ -79,7 +81,9 @@ export type Database = {
           end_date: string
           from_address?: string | null
           id?: string
+          is_subtask?: boolean | null
           move_type: string
+          parent_move_id?: string | null
           start_date: string
           status?: string
           title: string
@@ -94,7 +98,9 @@ export type Database = {
           end_date?: string
           from_address?: string | null
           id?: string
+          is_subtask?: boolean | null
           move_type?: string
+          parent_move_id?: string | null
           start_date?: string
           status?: string
           title?: string
@@ -108,6 +114,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moves_parent_move_id_fkey"
+            columns: ["parent_move_id"]
+            isOneToOne: false
+            referencedRelation: "moves"
             referencedColumns: ["id"]
           },
           {

@@ -1,9 +1,8 @@
-
 import { AppLayout } from "@/components/AppLayout"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, Pencil, Trash2, Search } from "lucide-react"
+import { Plus, Pencil, Trash2, Search, ChevronRight } from "lucide-react"
 import { useState, useMemo } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { format, isSameDay } from "date-fns"
@@ -55,7 +54,8 @@ async function fetchMoves() {
     throw error
   }
 
-  return data as Move[]
+  const moves = data as Move[]
+  return moves
 }
 
 export default function Schedule() {
@@ -142,6 +142,16 @@ export default function Schedule() {
 
       return sortOrder === "asc" ? compareResult : -compareResult
     })
+
+  const groupedMoves = useMemo(() => {
+    if (!filteredAndSortedMoves) return []
+    
+    const mainMoves = filteredAndSortedMoves.filter(move => !move.is_subtask)
+    return mainMoves.map(mainMove => ({
+      ...mainMove,
+      subtasks: filteredAndSortedMoves.filter(move => move.parent_move_id === mainMove.id)
+    }))
+  }, [filteredAndSortedMoves])
 
   return (
     <AppLayout>
@@ -230,6 +240,11 @@ export default function Schedule() {
                       <div className="text-gray-500">
                         {move.clients.first_name} {move.clients.last_name}
                       </div>
+                      {move.is_subtask && (
+                        <div className="text-xs text-blue-600 mt-1">
+                          Sub-task
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -301,73 +316,138 @@ export default function Schedule() {
               <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
                 {isLoading ? (
                   <p className="text-sm text-gray-500">Loading moves...</p>
-                ) : filteredAndSortedMoves && filteredAndSortedMoves.length > 0 ? (
-                  filteredAndSortedMoves.map((move) => (
-                    <div
-                      key={move.id}
-                      className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 cursor-move"
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData("moveId", move.id)
-                        setDraggedMoveId(move.id)
-                      }}
-                      onDragEnd={() => setDraggedMoveId(null)}
-                    >
-                      <div>
-                        <div className="font-medium">
-                          {move.clients.first_name} {move.clients.last_name}
+                ) : groupedMoves && groupedMoves.length > 0 ? (
+                  groupedMoves.map((move) => (
+                    <div key={move.id} className="space-y-2">
+                      <div
+                        className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 cursor-move"
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("moveId", move.id)
+                          setDraggedMoveId(move.id)
+                        }}
+                        onDragEnd={() => setDraggedMoveId(null)}
+                      >
+                        <div>
+                          <div className="font-medium">
+                            {move.clients.first_name} {move.clients.last_name}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {format(new Date(move.start_date), "PPP")}
+                          </div>
+                          <div className="text-sm text-gray-500">{move.move_type}</div>
+                          <div className="text-sm text-gray-500 truncate max-w-[300px]">
+                            {move.from_address}
+                          </div>
+                          <div className="mt-1">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+                              ${move.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                move.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+                                  'bg-yellow-100 text-yellow-700'
+                              }`}>
+                              {move.status}
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-500">
-                          {format(new Date(move.start_date), "PPP")}
-                        </div>
-                        <div className="text-sm text-gray-500">{move.move_type}</div>
-                        <div className="text-sm text-gray-500 truncate max-w-[300px]">
-                          {move.from_address}
-                        </div>
-                        <div className="mt-1">
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
-                            ${move.status === 'completed' ? 'bg-green-100 text-green-700' :
-                              move.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
-                                'bg-yellow-100 text-yellow-700'
-                            }`}>
-                            {move.status}
-                          </span>
+                        <div className="flex gap-1">
+                          <MoveDialog
+                            mode="create"
+                            parentMoveId={move.id}
+                            trigger={
+                              <Button variant="outline" size="sm" className="h-8">
+                                <Plus className="h-4 w-4 mr-1" />
+                                Sub-task
+                              </Button>
+                            }
+                          />
+                          <MoveDialog
+                            mode="edit"
+                            move={move}
+                            trigger={
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Move</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete this move? This will also delete all related sub-tasks.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDelete(move.id)}
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </div>
-                      <div className="flex gap-1">
-                        <MoveDialog
-                          mode="edit"
-                          move={move}
-                          trigger={
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          }
-                        />
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Move</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete this move? This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDelete(move.id)}
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
+                      {move.subtasks && move.subtasks.length > 0 && (
+                        <div className="pl-4 space-y-2">
+                          {move.subtasks.map((subtask) => (
+                            <div
+                              key={subtask.id}
+                              className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 bg-gray-50/50"
+                            >
+                              <div className="flex items-center gap-2">
+                                <ChevronRight className="h-4 w-4 text-gray-400" />
+                                <div>
+                                  <div className="font-medium">{subtask.title}</div>
+                                  <div className="text-sm text-gray-500">
+                                    {format(new Date(subtask.start_date), "PPP")}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex gap-1">
+                                <MoveDialog
+                                  mode="edit"
+                                  move={subtask}
+                                  trigger={
+                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                  }
+                                />
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                      <Trash2 className="h-4 w-4 text-red-500" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Delete Sub-task</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Are you sure you want to delete this sub-task?
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handleDelete(subtask.id)}
+                                      >
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))
                 ) : (
