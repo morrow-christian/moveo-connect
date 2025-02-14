@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/AppLayout"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, Pencil, Trash2, Search, ChevronRight } from "lucide-react"
+import { Plus, Pencil, Trash2, Search, ChevronRight, ChevronLeft } from "lucide-react"
 import { useState, useMemo, useEffect, useCallback } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { format, isSameDay } from "date-fns"
@@ -151,7 +151,7 @@ export default function Schedule() {
       sortField,
       sortOrder
     }),
-    keepPreviousData: true, // Keep old data while fetching new data
+    placeholderData: (previousData) => previousData, // Replace keepPreviousData with placeholderData
     staleTime: 30000, // Consider data fresh for 30 seconds
   })
 
@@ -531,10 +531,13 @@ export default function Schedule() {
                       <Pagination>
                         <PaginationContent>
                           <PaginationItem>
-                            <PaginationPrevious
-                              onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-                              disabled={currentPage === 0}
-                            />
+                            {currentPage === 0 ? (
+                              <Button variant="outline" size="icon" disabled className="cursor-not-allowed">
+                                <ChevronLeft className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <PaginationPrevious onClick={() => setCurrentPage(p => Math.max(0, p - 1))} />
+                            )}
                           </PaginationItem>
                           {[...Array(totalPages)].map((_, i) => (
                             <PaginationItem key={i}>
@@ -547,10 +550,13 @@ export default function Schedule() {
                             </PaginationItem>
                           ))}
                           <PaginationItem>
-                            <PaginationNext
-                              onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
-                              disabled={currentPage === totalPages - 1}
-                            />
+                            {currentPage === totalPages - 1 ? (
+                              <Button variant="outline" size="icon" disabled className="cursor-not-allowed">
+                                <ChevronRight className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <PaginationNext onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))} />
+                            )}
                           </PaginationItem>
                         </PaginationContent>
                       </Pagination>
