@@ -10,38 +10,12 @@ import { toast } from "sonner"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Move } from "@/types"
 import { MoveDialog } from "@/components/moves/MoveDialog"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+import { CalendarSync } from "@/components/calendar/CalendarSync"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 import debounce from "lodash/debounce"
 
 type SortField = "date" | "name" | "type"
@@ -228,15 +202,18 @@ export default function Schedule() {
             <h1 className="text-2xl font-bold text-gray-900">Schedule</h1>
             <p className="text-sm text-gray-500">Manage moves and appointments</p>
           </div>
-          <MoveDialog
-            mode="create"
-            trigger={
-              <Button size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Event
-              </Button>
-            }
-          />
+          <div className="flex items-center gap-2">
+            <CalendarSync />
+            <MoveDialog
+              mode="create"
+              trigger={
+                <Button size="sm">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Event
+                </Button>
+              }
+            />
+          </div>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
