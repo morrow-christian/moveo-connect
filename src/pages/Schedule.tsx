@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, Pencil, Trash2, Search, ChevronRight } from "lucide-react"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { format, isSameDay } from "date-fns"
 import { toast } from "sonner"
@@ -34,12 +34,31 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
+import debounce from "lodash/debounce"
 
 type SortField = "date" | "name" | "type"
 type SortOrder = "asc" | "desc"
 
-async function fetchMoves() {
-  const { data, error } = await supabase
+const PAGE_SIZE = 10
+
+interface FetchMovesParams {
+  page: number
+  search?: string
+  status?: string
+  sortField?: SortField
+  sortOrder?: SortOrder
+}
+
+async function fetchMoves({ page, search, status, sortField, sortOrder }: FetchMovesParams) {
+  let query = supabase
     .from("moves")
     .select(`
       *,
@@ -47,30 +66,93 @@ async function fetchMoves() {
         first_name,
         last_name
       )
+    `, { count: 'exact' })
+
+  // Apply filters
+  if (search) {
+    query = query.or(`
+      title.ilike.%${search}%,
+      move_type.ilike.%${search}%,
+      clients.first_name.ilike.%${search}%,
+      clients.last_name.ilike.%${search}%
     `)
-    .order("start_date", { ascending: true })
+  }
+
+  if (status && status !== 'all') {
+    query = query.eq('status', status)
+  }
+
+  // Apply sorting
+  if (sortField) {
+    const orderField = sortField === 'name' 
+      ? 'clients.first_name' 
+      : sortField === 'date' 
+        ? 'start_date' 
+        : 'move_type'
+    
+    query = query.order(orderField, { 
+      ascending: sortOrder === 'asc'
+    })
+  } else {
+    query = query.order('start_date', { ascending: true })
+  }
+
+  // Apply pagination
+  const from = page * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
+  query = query.range(from, to)
+
+  const { data, error, count } = await query
 
   if (error) {
     throw error
   }
 
-  const moves = data as Move[]
-  return moves
+  return {
+    moves: data as Move[],
+    totalCount: count || 0
+  }
 }
 
 export default function Schedule() {
   const [date, setDate] = useState<Date | undefined>(new Date())
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [sortField, setSortField] = useState<SortField>("date")
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc")
+  const [currentPage, setCurrentPage] = useState(0)
   const [draggedMoveId, setDraggedMoveId] = useState<string | null>(null)
   
   const queryClient = useQueryClient()
-  
-  const { data: moves, isLoading } = useQuery({
-    queryKey: ["moves"],
-    queryFn: fetchMoves,
+
+  // Implement debounced search
+  const debouncedSetSearch = useCallback(
+    debounce((value: string) => {
+      setDebouncedSearch(value)
+      setCurrentPage(0) // Reset to first page on new search
+    }, 300),
+    []
+  )
+
+  useEffect(() => {
+    debouncedSetSearch(searchQuery)
+    return () => {
+      debouncedSetSearch.cancel()
+    }
+  }, [searchQuery, debouncedSetSearch])
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['moves', currentPage, debouncedSearch, statusFilter, sortField, sortOrder],
+    queryFn: () => fetchMoves({
+      page: currentPage,
+      search: debouncedSearch,
+      status: statusFilter,
+      sortField,
+      sortOrder
+    }),
+    keepPreviousData: true, // Keep old data while fetching new data
+    staleTime: 30000, // Consider data fresh for 30 seconds
   })
 
   const handleDelete = async (id: string) => {
@@ -102,56 +184,41 @@ export default function Schedule() {
   }
 
   const moveDates = useMemo(() => {
-    return moves?.map(move => new Date(move.start_date)) || []
-  }, [moves])
+    return data?.moves?.map(move => new Date(move.start_date)) || []
+  }, [data?.moves])
 
   const movesForSelectedDate = useMemo(() => {
-    if (!date || !moves) return []
-    return moves.filter(move => isSameDay(new Date(move.start_date), date))
-  }, [date, moves])
+    if (!date || !data?.moves) return []
+    return data.moves.filter(move => isSameDay(new Date(move.start_date), date))
+  }, [date, data?.moves])
 
-  const filteredAndSortedMoves = moves
-    ?.filter((move) => {
-      const matchesSearch =
-        searchQuery === "" ||
-        move.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        move.move_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        move.clients.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        move.clients.last_name.toLowerCase().includes(searchQuery.toLowerCase())
-
-      const matchesStatus =
-        statusFilter === "all" || move.status === statusFilter
-
-      return matchesSearch && matchesStatus
-    })
-    .sort((a, b) => {
-      let compareResult = 0
-      
-      switch (sortField) {
-        case "date":
-          compareResult = new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
-          break
-        case "name":
-          compareResult = (a.clients.first_name + a.clients.last_name)
-            .localeCompare(b.clients.first_name + b.clients.last_name)
-          break
-        case "type":
-          compareResult = a.move_type.localeCompare(b.move_type)
-          break
-      }
-
-      return sortOrder === "asc" ? compareResult : -compareResult
-    })
+  const totalPages = Math.ceil((data?.totalCount || 0) / PAGE_SIZE)
 
   const groupedMoves = useMemo(() => {
-    if (!filteredAndSortedMoves) return []
+    if (!data?.moves) return []
     
-    const mainMoves = filteredAndSortedMoves.filter(move => !move.is_subtask)
+    const mainMoves = data.moves.filter(move => !move.is_subtask)
     return mainMoves.map(mainMove => ({
       ...mainMove,
-      subtasks: filteredAndSortedMoves.filter(move => move.parent_move_id === mainMove.id)
+      subtasks: data.moves.filter(move => move.parent_move_id === mainMove.id)
     }))
-  }, [filteredAndSortedMoves])
+  }, [data?.moves])
+
+  // Prefetch next page
+  useEffect(() => {
+    if (currentPage < totalPages - 1) {
+      queryClient.prefetchQuery({
+        queryKey: ['moves', currentPage + 1, debouncedSearch, statusFilter, sortField, sortOrder],
+        queryFn: () => fetchMoves({
+          page: currentPage + 1,
+          search: debouncedSearch,
+          status: statusFilter,
+          sortField,
+          sortOrder
+        })
+      })
+    }
+  }, [currentPage, queryClient, debouncedSearch, statusFilter, sortField, sortOrder, totalPages])
 
   return (
     <AppLayout>
@@ -270,7 +337,10 @@ export default function Schedule() {
                   </div>
                   <Select
                     value={statusFilter}
-                    onValueChange={(value) => setStatusFilter(value)}
+                    onValueChange={(value) => {
+                      setStatusFilter(value)
+                      setCurrentPage(0)
+                    }}
                   >
                     <SelectTrigger className="w-[140px]">
                       <SelectValue placeholder="Filter by status" />
@@ -286,7 +356,10 @@ export default function Schedule() {
                 <div className="flex gap-2">
                   <Select
                     value={sortField}
-                    onValueChange={(value) => setSortField(value as SortField)}
+                    onValueChange={(value) => {
+                      setSortField(value as SortField)
+                      setCurrentPage(0)
+                    }}
                   >
                     <SelectTrigger className="w-[140px]">
                       <SelectValue placeholder="Sort by" />
@@ -299,7 +372,10 @@ export default function Schedule() {
                   </Select>
                   <Select
                     value={sortOrder}
-                    onValueChange={(value) => setSortOrder(value as SortOrder)}
+                    onValueChange={(value) => {
+                      setSortOrder(value as SortOrder)
+                      setCurrentPage(0)
+                    }}
                   >
                     <SelectTrigger className="w-[140px]">
                       <SelectValue placeholder="Sort order" />
@@ -317,139 +393,169 @@ export default function Schedule() {
                 {isLoading ? (
                   <p className="text-sm text-gray-500">Loading moves...</p>
                 ) : groupedMoves && groupedMoves.length > 0 ? (
-                  groupedMoves.map((move) => (
-                    <div key={move.id} className="space-y-2">
-                      <div
-                        className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 cursor-move"
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData("moveId", move.id)
-                          setDraggedMoveId(move.id)
-                        }}
-                        onDragEnd={() => setDraggedMoveId(null)}
-                      >
-                        <div>
-                          <div className="font-medium">
-                            {move.clients.first_name} {move.clients.last_name}
+                  <>
+                    {groupedMoves.map((move) => (
+                      <div key={move.id} className="space-y-2">
+                        <div
+                          className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 cursor-move"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("moveId", move.id)
+                            setDraggedMoveId(move.id)
+                          }}
+                          onDragEnd={() => setDraggedMoveId(null)}
+                        >
+                          <div>
+                            <div className="font-medium">
+                              {move.clients.first_name} {move.clients.last_name}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {format(new Date(move.start_date), "PPP")}
+                            </div>
+                            <div className="text-sm text-gray-500">{move.move_type}</div>
+                            <div className="text-sm text-gray-500 truncate max-w-[300px]">
+                              {move.from_address}
+                            </div>
+                            <div className="mt-1">
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+                                ${move.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                  move.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+                                    'bg-yellow-100 text-yellow-700'
+                                }`}>
+                                {move.status}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-sm text-gray-500">
-                            {format(new Date(move.start_date), "PPP")}
-                          </div>
-                          <div className="text-sm text-gray-500">{move.move_type}</div>
-                          <div className="text-sm text-gray-500 truncate max-w-[300px]">
-                            {move.from_address}
-                          </div>
-                          <div className="mt-1">
-                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
-                              ${move.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                move.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
-                                  'bg-yellow-100 text-yellow-700'
-                              }`}>
-                              {move.status}
-                            </span>
+                          <div className="flex gap-1">
+                            <MoveDialog
+                              mode="create"
+                              parentMoveId={move.id}
+                              trigger={
+                                <Button variant="outline" size="sm" className="h-8">
+                                  <Plus className="h-4 w-4 mr-1" />
+                                  Sub-task
+                                </Button>
+                              }
+                            />
+                            <MoveDialog
+                              mode="edit"
+                              move={move}
+                              trigger={
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              }
+                            />
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Move</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this move? This will also delete all related sub-tasks.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDelete(move.id)}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </div>
-                        <div className="flex gap-1">
-                          <MoveDialog
-                            mode="create"
-                            parentMoveId={move.id}
-                            trigger={
-                              <Button variant="outline" size="sm" className="h-8">
-                                <Plus className="h-4 w-4 mr-1" />
-                                Sub-task
-                              </Button>
-                            }
-                          />
-                          <MoveDialog
-                            mode="edit"
-                            move={move}
-                            trigger={
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                            }
-                          />
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <Trash2 className="h-4 w-4 text-red-500" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Move</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete this move? This will also delete all related sub-tasks.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDelete(move.id)}
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </div>
-                      {move.subtasks && move.subtasks.length > 0 && (
-                        <div className="pl-4 space-y-2">
-                          {move.subtasks.map((subtask) => (
-                            <div
-                              key={subtask.id}
-                              className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 bg-gray-50/50"
-                            >
-                              <div className="flex items-center gap-2">
-                                <ChevronRight className="h-4 w-4 text-gray-400" />
-                                <div>
-                                  <div className="font-medium">{subtask.title}</div>
-                                  <div className="text-sm text-gray-500">
-                                    {format(new Date(subtask.start_date), "PPP")}
+                        {move.subtasks && move.subtasks.length > 0 && (
+                          <div className="pl-4 space-y-2">
+                            {move.subtasks.map((subtask) => (
+                              <div
+                                key={subtask.id}
+                                className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 bg-gray-50/50"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                                  <div>
+                                    <div className="font-medium">{subtask.title}</div>
+                                    <div className="text-sm text-gray-500">
+                                      {format(new Date(subtask.start_date), "PPP")}
+                                    </div>
                                   </div>
                                 </div>
+                                <div className="flex gap-1">
+                                  <MoveDialog
+                                    mode="edit"
+                                    move={subtask}
+                                    trigger={
+                                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                    }
+                                  />
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Delete Sub-task</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Are you sure you want to delete this sub-task?
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={() => handleDelete(subtask.id)}
+                                        >
+                                          Delete
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </div>
                               </div>
-                              <div className="flex gap-1">
-                                <MoveDialog
-                                  mode="edit"
-                                  move={subtask}
-                                  trigger={
-                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                      <Pencil className="h-4 w-4" />
-                                    </Button>
-                                  }
-                                />
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                      <Trash2 className="h-4 w-4 text-red-500" />
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>Delete Sub-task</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        Are you sure you want to delete this sub-task?
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction
-                                        onClick={() => handleDelete(subtask.id)}
-                                      >
-                                        Delete
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </div>
-                            </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    <div className="pt-4">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                              disabled={currentPage === 0}
+                            />
+                          </PaginationItem>
+                          {[...Array(totalPages)].map((_, i) => (
+                            <PaginationItem key={i}>
+                              <PaginationLink
+                                onClick={() => setCurrentPage(i)}
+                                isActive={currentPage === i}
+                              >
+                                {i + 1}
+                              </PaginationLink>
+                            </PaginationItem>
                           ))}
-                        </div>
-                      )}
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                              disabled={currentPage === totalPages - 1}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
                     </div>
-                  ))
+                  </>
                 ) : (
                   <p className="text-sm text-gray-500">No moves found</p>
                 )}
