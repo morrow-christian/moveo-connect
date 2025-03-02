@@ -43,8 +43,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const checkSubscription = async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('subscriptions') as any
+      // Fixing the TypeScript syntax by wrapping the entire chain in parentheses
+      const { data, error } = await (supabase
+        .from('subscriptions') as any)
         .select("*")
         .eq("user_id", userId)
         .eq("status", "active")
