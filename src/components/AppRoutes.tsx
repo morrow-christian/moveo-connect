@@ -9,10 +9,11 @@ import Settings from "@/pages/Settings"
 import Auth from "@/pages/Auth"
 import Subscribe from "@/pages/Subscribe"
 import NotFound from "@/pages/NotFound"
+import { Subscription } from "@/types/subscription"
 
 interface AppRoutesProps {
   session: any | null
-  subscription: any | null
+  subscription: Subscription | null
 }
 
 export function AppRoutes({ session, subscription }: AppRoutesProps) {

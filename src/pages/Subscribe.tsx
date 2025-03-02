@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { useQuery } from "@tanstack/react-query"
+import { Subscription } from "@/types/subscription"
 
 export default function Subscribe() {
   const navigate = useNavigate()
@@ -32,7 +33,7 @@ export default function Subscribe() {
       }
 
       const { data, error } = await supabase
-        .from("subscriptions")
+        .from('subscriptions') as any
         .select("*")
         .eq("user_id", user.id)
         .eq("status", "active")
@@ -43,7 +44,7 @@ export default function Subscribe() {
         throw error
       }
 
-      return data
+      return data as Subscription | null
     },
   })
 
@@ -65,8 +66,8 @@ export default function Subscribe() {
 
       // In a production app, you would integrate with Stripe or another payment provider here
       // For this demo, we'll create a subscription directly
-      const { error } = await supabase
-        .from("subscriptions")
+      const { error } = await (supabase
+        .from('subscriptions') as any)
         .insert({
           user_id: user.id,
           plan_type: selectedPlan,

@@ -2,15 +2,16 @@
 import { useEffect, useState } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { useNavigate } from "react-router-dom"
+import { Subscription } from "@/types/subscription"
 
 interface AuthProviderProps {
-  children: (session: any | null, loading: boolean, subscription: any | null) => React.ReactNode
+  children: (session: any | null, loading: boolean, subscription: Subscription | null) => React.ReactNode
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [subscription, setSubscription] = useState<any>(null)
+  const [subscription, setSubscription] = useState<Subscription | null>(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -43,7 +44,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const checkSubscription = async (userId: string) => {
     try {
       const { data, error } = await supabase
-        .from("subscriptions")
+        .from('subscriptions') as any
         .select("*")
         .eq("user_id", userId)
         .eq("status", "active")
