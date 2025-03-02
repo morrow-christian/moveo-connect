@@ -43,19 +43,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const checkSubscription = async (userId: string) => {
     try {
-      // Fixing the TypeScript syntax by wrapping the entire chain in parentheses
-      const { data, error } = await (supabase
-        .from('subscriptions') as any)
+      // Using a more aggressive type assertion approach
+      const response = await (supabase as any)
+        .from('subscriptions')
         .select("*")
         .eq("user_id", userId)
         .eq("status", "active")
         .maybeSingle()
 
-      if (error) {
-        console.error("Error fetching subscription:", error)
+      if (response.error) {
+        console.error("Error fetching subscription:", response.error)
       }
 
-      setSubscription(data)
+      setSubscription(response.data)
       setLoading(false)
     } catch (error) {
       console.error("Error checking subscription:", error)

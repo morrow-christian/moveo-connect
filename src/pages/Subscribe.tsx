@@ -1,4 +1,3 @@
-
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
@@ -32,20 +31,19 @@ export default function Subscribe() {
         return null
       }
 
-      // Fixing the TypeScript syntax by wrapping the entire chain in parentheses
-      const { data, error } = await (supabase
-        .from('subscriptions') as any)
+      const response = await (supabase as any)
+        .from('subscriptions')
         .select("*")
         .eq("user_id", user.id)
         .eq("status", "active")
         .maybeSingle()
 
-      if (error) {
+      if (response.error) {
         toast.error("Error loading subscription information")
-        throw error
+        throw response.error
       }
 
-      return data as Subscription | null
+      return response.data as Subscription | null
     },
   })
 
@@ -65,10 +63,8 @@ export default function Subscribe() {
         return
       }
 
-      // In a production app, you would integrate with Stripe or another payment provider here
-      // For this demo, we'll create a subscription directly
-      const { error } = await (supabase
-        .from('subscriptions') as any)
+      const response = await (supabase as any)
+        .from('subscriptions')
         .insert({
           user_id: user.id,
           plan_type: selectedPlan,
@@ -79,9 +75,9 @@ export default function Subscribe() {
             : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
         })
 
-      if (error) {
+      if (response.error) {
         toast.error("Error creating subscription")
-        throw error
+        throw response.error
       }
 
       toast.success(`Successfully subscribed to ${selectedPlan} plan!`)
