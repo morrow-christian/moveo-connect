@@ -19,21 +19,54 @@ export const STRIPE_PRICES = {
 }
 
 interface SubscriptionPlansProps {
-  selectedPlan: "monthly" | "annual" | null
-  setSelectedPlan: (plan: "monthly" | "annual" | null) => void
+  selectedPlan: "free" | "monthly" | "annual" | null
+  setSelectedPlan: (plan: "free" | "monthly" | "annual" | null) => void
 }
 
 export function SubscriptionPlans({ selectedPlan, setSelectedPlan }: SubscriptionPlansProps) {
   return (
     <>
-      <div className="grid gap-6 sm:grid-cols-2 lg:gap-8">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8">
+        <Card className={`border-2 transition-all ${selectedPlan === "free" ? "border-primary" : "border-transparent"}`}>
+          <CardHeader>
+            <CardTitle>Free Trial</CardTitle>
+            <CardDescription>Perfect for testing our services</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">$0<span className="text-sm font-normal text-gray-500">/month</span></p>
+            <ul className="mt-4 space-y-2">
+              <li className="flex items-center">
+                <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                <span>Up to 3 clients</span>
+              </li>
+              <li className="flex items-center">
+                <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                <span>Basic calendar</span>
+              </li>
+              <li className="flex items-center">
+                <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                <span>14-day trial</span>
+              </li>
+            </ul>
+          </CardContent>
+          <CardFooter>
+            <Button 
+              variant={selectedPlan === "free" ? "default" : "outline"} 
+              className="w-full"
+              onClick={() => setSelectedPlan("free")}
+            >
+              Start Free Trial
+            </Button>
+          </CardFooter>
+        </Card>
+
         <Card className={`border-2 transition-all ${selectedPlan === "monthly" ? "border-primary" : "border-transparent"}`}>
           <CardHeader>
             <CardTitle>Monthly Plan</CardTitle>
             <CardDescription>Perfect for short-term projects</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">$19.99<span className="text-sm font-normal text-gray-500">/month</span></p>
+            <p className="text-3xl font-bold">$15<span className="text-sm font-normal text-gray-500">/month</span></p>
             <ul className="mt-4 space-y-2">
               <li className="flex items-center">
                 <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
@@ -63,10 +96,10 @@ export function SubscriptionPlans({ selectedPlan, setSelectedPlan }: Subscriptio
         <Card className={`border-2 transition-all ${selectedPlan === "annual" ? "border-primary" : "border-transparent"}`}>
           <CardHeader>
             <CardTitle>Annual Plan</CardTitle>
-            <CardDescription>Save 20% with yearly billing</CardDescription>
+            <CardDescription>Save 33% with yearly billing</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">$191.88<span className="text-sm font-normal text-gray-500">/year</span></p>
+            <p className="text-3xl font-bold">$120<span className="text-sm font-normal text-gray-500">/year</span></p>
             <ul className="mt-4 space-y-2">
               <li className="flex items-center">
                 <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
@@ -101,10 +134,20 @@ export function SubscriptionPlans({ selectedPlan, setSelectedPlan }: Subscriptio
       <div className="mt-8 flex justify-center">
         {selectedPlan ? (
           <div className="w-full max-w-md">
-            <StripeCheckout 
-              planType={selectedPlan} 
-              priceId={selectedPlan === "monthly" ? STRIPE_PRICES.monthly : STRIPE_PRICES.annual} 
-            />
+            {selectedPlan === "free" ? (
+              <Button 
+                size="lg" 
+                className="w-full"
+                onClick={() => window.location.href = "/"}
+              >
+                Start Free Trial
+              </Button>
+            ) : (
+              <StripeCheckout 
+                planType={selectedPlan} 
+                priceId={selectedPlan === "monthly" ? STRIPE_PRICES.monthly : STRIPE_PRICES.annual} 
+              />
+            )}
           </div>
         ) : (
           <Button 

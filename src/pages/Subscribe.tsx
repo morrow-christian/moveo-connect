@@ -7,7 +7,7 @@ import { SubscriptionPlans } from "@/components/subscription/SubscriptionPlans"
 import { ActiveSubscription } from "@/components/subscription/ActiveSubscription"
 
 export default function Subscribe() {
-  const [selectedPlan, setSelectedPlan] = useState<"monthly" | "annual" | null>(null)
+  const [selectedPlan, setSelectedPlan] = useState<"free" | "monthly" | "annual" | null>(null)
   const { data: subscription, isLoading: isLoadingSubscription } = useSubscription()
 
   if (isLoadingSubscription) {

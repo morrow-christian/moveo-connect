@@ -2,7 +2,7 @@
 export interface Subscription {
   id: string;
   user_id: string;
-  plan_type: 'monthly' | 'annual';
+  plan_type: 'free' | 'monthly' | 'annual';
   status: 'active' | 'canceled' | 'past_due';
   start_date: string;
   end_date: string;
