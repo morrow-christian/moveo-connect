@@ -18,19 +18,29 @@ export function useSubscription() {
         return null
       }
 
-      const response = await (supabase as any)
-        .from('subscriptions')
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .maybeSingle()
+      try {
+        const response = await supabase
+          .from('subscriptions')
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .maybeSingle()
 
-      if (response.error) {
-        toast.error("Error loading subscription information")
-        throw response.error
+        if (response.error) {
+          console.error("Error fetching subscription:", response.error)
+          if (response.error.code === "PGRST116") {
+            // This error code means the table doesn't exist yet
+            toast.error("Error loading subscription information")
+            throw response.error
+          }
+          return null
+        }
+
+        return response.data as Subscription | null
+      } catch (error) {
+        console.error("Error in subscription query:", error)
+        return null
       }
-
-      return response.data as Subscription | null
     },
   })
 }
