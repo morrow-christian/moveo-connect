@@ -1,4 +1,3 @@
-
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
@@ -20,8 +19,8 @@ import { StripeCheckout } from "@/components/stripe/StripeCheckout"
 
 // Stripe Price IDs for the subscription plans
 const STRIPE_PRICES = {
-  monthly: "price_monthly_placeholder", // Replace with your actual Stripe price ID
-  annual: "price_annual_placeholder",   // Replace with your actual Stripe price ID
+  monthly: "price_1P48jKJ3nN8yCZvlLxw1hv4z", // Your actual Stripe monthly price ID
+  annual: "price_1P48kQJ3nN8yCZvlzZMCLlTN",  // Your actual Stripe annual price ID
 }
 
 export default function Subscribe() {

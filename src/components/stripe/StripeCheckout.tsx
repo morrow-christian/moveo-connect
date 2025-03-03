@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
@@ -22,6 +22,7 @@ export function StripeCheckout({ planType, priceId }: StripeCheckoutProps) {
       const { data: { user } } = await supabase.auth.getUser()
       
       if (!user) {
+        toast.error("You must be logged in to subscribe")
         navigate("/auth")
         return
       }
@@ -43,7 +44,9 @@ export function StripeCheckout({ planType, priceId }: StripeCheckoutProps) {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to create checkout session')
+        const errorData = await response.json().catch(() => ({}))
+        console.error("Checkout error:", errorData)
+        throw new Error(errorData.error || 'Failed to create checkout session')
       }
 
       const { sessionUrl } = await response.json()
@@ -52,7 +55,7 @@ export function StripeCheckout({ planType, priceId }: StripeCheckoutProps) {
       window.location.href = sessionUrl
     } catch (error) {
       console.error("Error creating checkout session:", error)
-      toast.error("Failed to start checkout process")
+      toast.error(error instanceof Error ? error.message : "Failed to start checkout process")
       setIsLoading(false)
     }
   }
@@ -69,7 +72,7 @@ export function StripeCheckout({ planType, priceId }: StripeCheckoutProps) {
           Processing...
         </>
       ) : (
-        `Subscribe to ${planType} Plan`
+        `Subscribe to ${planType === "monthly" ? "Monthly" : "Annual"} Plan`
       )}
     </Button>
   )
