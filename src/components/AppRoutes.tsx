@@ -8,6 +8,7 @@ import Schedule from "@/pages/Schedule"
 import Settings from "@/pages/Settings"
 import Auth from "@/pages/Auth"
 import Subscribe from "@/pages/Subscribe"
+import SubscriptionSuccess from "@/pages/SubscriptionSuccess"
 import NotFound from "@/pages/NotFound"
 import { Subscription } from "@/types/subscription"
 
@@ -62,6 +63,12 @@ export function AppRoutes({ session, subscription }: AppRoutesProps) {
         path="/subscribe"
         element={
           session ? <Subscribe /> : <Navigate to="/auth" replace />
+        }
+      />
+      <Route
+        path="/subscription/success"
+        element={
+          session ? <SubscriptionSuccess /> : <Navigate to="/auth" replace />
         }
       />
       <Route

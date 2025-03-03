@@ -8,4 +8,7 @@ export interface Subscription {
   end_date: string;
   created_at: string;
   updated_at: string;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
+  stripe_price_id?: string;
 }

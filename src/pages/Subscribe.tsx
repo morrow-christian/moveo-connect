@@ -1,3 +1,4 @@
+
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
@@ -15,10 +16,16 @@ import {
 } from "@/components/ui/card"
 import { useQuery } from "@tanstack/react-query"
 import { Subscription } from "@/types/subscription"
+import { StripeCheckout } from "@/components/stripe/StripeCheckout"
+
+// Stripe Price IDs for the subscription plans
+const STRIPE_PRICES = {
+  monthly: "price_monthly_placeholder", // Replace with your actual Stripe price ID
+  annual: "price_annual_placeholder",   // Replace with your actual Stripe price ID
+}
 
 export default function Subscribe() {
   const navigate = useNavigate()
-  const [isLoading, setIsLoading] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "annual" | null>(null)
 
   const { data: subscription, isLoading: isLoadingSubscription } = useQuery({
@@ -46,49 +53,6 @@ export default function Subscribe() {
       return response.data as Subscription | null
     },
   })
-
-  const handleSubscribe = async () => {
-    if (!selectedPlan) {
-      toast.error("Please select a subscription plan")
-      return
-    }
-
-    setIsLoading(true)
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (!user) {
-        navigate("/auth")
-        return
-      }
-
-      const response = await (supabase as any)
-        .from('subscriptions')
-        .insert({
-          user_id: user.id,
-          plan_type: selectedPlan,
-          status: "active",
-          start_date: new Date().toISOString(),
-          end_date: selectedPlan === "monthly" 
-            ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() 
-            : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-        })
-
-      if (response.error) {
-        toast.error("Error creating subscription")
-        throw response.error
-      }
-
-      toast.success(`Successfully subscribed to ${selectedPlan} plan!`)
-      navigate("/")
-    } catch (error) {
-      console.error("Error subscribing:", error)
-      toast.error("An unexpected error occurred")
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   if (isLoadingSubscription) {
     return (
@@ -228,21 +192,22 @@ export default function Subscribe() {
         </div>
 
         <div className="mt-8 flex justify-center">
-          <Button 
-            size="lg" 
-            disabled={!selectedPlan || isLoading} 
-            onClick={handleSubscribe}
-            className="w-full max-w-md"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              `Subscribe to ${selectedPlan || ''} Plan`
-            )}
-          </Button>
+          {selectedPlan ? (
+            <div className="w-full max-w-md">
+              <StripeCheckout 
+                planType={selectedPlan} 
+                priceId={selectedPlan === "monthly" ? STRIPE_PRICES.monthly : STRIPE_PRICES.annual} 
+              />
+            </div>
+          ) : (
+            <Button 
+              size="lg" 
+              disabled={true}
+              className="w-full max-w-md"
+            >
+              Select a plan to continue
+            </Button>
+          )}
         </div>
       </div>
     </AppLayout>
