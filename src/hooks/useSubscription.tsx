@@ -43,8 +43,9 @@ export function useSubscription() {
       }
     },
     // Enable refetching capabilities
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     refetchOnMount: true,
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 2, // 2 minutes - shorter time for more frequent updates
+    retry: 1,
   })
 }
