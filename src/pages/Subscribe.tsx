@@ -1,6 +1,8 @@
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "react-router-dom"
 import { Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import { AppLayout } from "@/components/AppLayout"
 import { useSubscription } from "@/hooks/useSubscription"
 import { SubscriptionPlans } from "@/components/subscription/SubscriptionPlans"
@@ -8,7 +10,29 @@ import { ActiveSubscription } from "@/components/subscription/ActiveSubscription
 
 export default function Subscribe() {
   const [selectedPlan, setSelectedPlan] = useState<"free" | "monthly" | "annual" | null>(null)
-  const { data: subscription, isLoading: isLoadingSubscription } = useSubscription()
+  const [searchParams] = useSearchParams()
+  const sessionId = searchParams.get("session_id")
+  
+  // Use the subscription hook with refetch capability
+  const { 
+    data: subscription, 
+    isLoading: isLoadingSubscription,
+    refetch 
+  } = useSubscription()
+
+  // Handle returning from Stripe checkout if session_id is present
+  useEffect(() => {
+    if (sessionId) {
+      // Refetch subscription data when returning from checkout
+      refetch()
+      
+      // Clear the URL parameters to avoid confusion
+      window.history.replaceState({}, document.title, window.location.pathname)
+      
+      // Show a success toast
+      toast.success("Subscription updated successfully!")
+    }
+  }, [sessionId, refetch])
 
   if (isLoadingSubscription) {
     return (
@@ -36,7 +60,9 @@ export default function Subscribe() {
         </div>
 
         {subscription ? (
-          <ActiveSubscription subscription={subscription} />
+          <ActiveSubscription 
+            subscription={subscription} 
+          />
         ) : (
           <SubscriptionPlans
             selectedPlan={selectedPlan}

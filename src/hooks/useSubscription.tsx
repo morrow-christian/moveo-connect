@@ -42,5 +42,9 @@ export function useSubscription() {
         return null
       }
     },
+    // Enable refetching capabilities
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    staleTime: 1000 * 60 * 5, // 5 minutes
   })
 }
