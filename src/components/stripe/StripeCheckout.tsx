@@ -27,32 +27,29 @@ export function StripeCheckout({ planType, priceId }: StripeCheckoutProps) {
         return
       }
 
-      // Create a checkout session via Supabase function
-      const response = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        },
+      // Call the Supabase Edge Function directly using supabase.functions.invoke
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: JSON.stringify({
           priceId,
           planType,
           userId: user.id,
+          email: user.email, // Pass user email for better customer data in Stripe
           successUrl: `${window.location.origin}/subscription/success`,
           cancelUrl: `${window.location.origin}/subscribe`,
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        console.error("Checkout error:", errorData)
-        throw new Error(errorData.error || 'Failed to create checkout session')
+      if (error) {
+        console.error("Checkout error:", error)
+        throw new Error(error.message || 'Failed to create checkout session')
       }
 
-      const { sessionUrl } = await response.json()
+      if (!data || !data.sessionUrl) {
+        throw new Error('Invalid response from checkout session creation')
+      }
 
       // Redirect to Stripe checkout
-      window.location.href = sessionUrl
+      window.location.href = data.sessionUrl
     } catch (error) {
       console.error("Error creating checkout session:", error)
       toast.error(error instanceof Error ? error.message : "Failed to start checkout process")

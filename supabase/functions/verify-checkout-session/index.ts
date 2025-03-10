@@ -6,6 +6,7 @@ import Stripe from "https://esm.sh/stripe@12.2.0"
 // Initialize Stripe with your secret key
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
   httpClient: Stripe.createFetchHttpClient(),
+  apiVersion: '2023-10-16',
 })
 
 // Initialize Supabase client
@@ -13,17 +14,17 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL") || ""
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-serve(async (req) => {
-  // CORS headers
-  const headers = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  }
+// Define CORS headers
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+}
 
-  // Handle CORS preflight request
+serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, {
-      headers,
+      headers: corsHeaders,
       status: 204,
     })
   }
@@ -33,7 +34,7 @@ serve(async (req) => {
     const authHeader = req.headers.get("authorization")
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       })
     }
@@ -44,7 +45,7 @@ serve(async (req) => {
 
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       })
     }
@@ -52,72 +53,92 @@ serve(async (req) => {
     // Parse request body
     const { sessionId } = await req.json()
 
-    // Retrieve the checkout session
-    const session = await stripe.checkout.sessions.retrieve(sessionId)
-
-    // Verify the session belongs to the user
-    if (session.metadata?.user_id !== user.id) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        headers: { ...headers, "Content-Type": "application/json" },
-        status: 401,
-      })
-    }
-
-    // Verify the session was completed
-    if (session.status !== "complete" && session.payment_status !== "paid") {
-      return new Response(JSON.stringify({ error: "Payment not completed" }), {
-        headers: { ...headers, "Content-Type": "application/json" },
+    if (!sessionId) {
+      return new Response(JSON.stringify({ error: "Session ID is required" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       })
     }
 
-    // Get the subscription details
-    const subscription = await stripe.subscriptions.retrieve(session.subscription as string)
+    console.log(`Verifying checkout session: ${sessionId} for user: ${user.id}`)
 
-    // Calculate the end date based on the current period end
-    const endDate = new Date(subscription.current_period_end * 1000).toISOString()
-    const startDate = new Date(subscription.current_period_start * 1000).toISOString()
-    const planType = session.metadata?.plan_type || "monthly"
+    // Retrieve the checkout session from Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['subscription', 'customer'],
+    })
 
-    // Check if a subscription already exists
-    const { data: existingSubscription } = await supabase
-      .from("subscriptions")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .single()
-
-    if (existingSubscription) {
-      // Update existing subscription
-      await supabase
-        .from("subscriptions")
-        .update({
-          stripe_subscription_id: subscription.id,
-          stripe_price_id: subscription.items.data[0].price.id,
-          plan_type: planType,
-          status: "active",
-          start_date: startDate,
-          end_date: endDate,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existingSubscription.id)
-    } else {
-      // Create new subscription
-      await supabase.from("subscriptions").insert({
-        user_id: user.id,
-        stripe_subscription_id: subscription.id,
-        stripe_price_id: subscription.items.data[0].price.id,
-        plan_type: planType,
-        status: "active",
-        start_date: startDate,
-        end_date: endDate,
+    if (!session) {
+      return new Response(JSON.stringify({ error: "Invalid session" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
       })
     }
 
+    // Verify that the session was successful
+    if (session.payment_status !== 'paid') {
+      console.log(`Session ${sessionId} payment status: ${session.payment_status}`)
+      return new Response(JSON.stringify({ error: "Payment not completed" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      })
+    }
+
+    // Verify that the user matches
+    const sessionUserId = session.metadata?.user_id
+    if (sessionUserId !== user.id) {
+      console.log(`User mismatch: session user ${sessionUserId} vs. authenticated user ${user.id}`)
+      return new Response(JSON.stringify({ error: "User mismatch" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 403,
+      })
+    }
+
+    // Get plan type from session metadata
+    const planType = session.metadata?.plan_type || 'monthly'
+    const stripeSubscriptionId = session.subscription?.toString() || ''
+    const stripePriceId = session.subscription?.items?.data[0]?.price?.id || ''
+
+    // Create or update the subscription record in Supabase
+    const { data: subscriptionData, error: subscriptionError } = await supabase
+      .from('subscriptions')
+      .upsert({
+        user_id: user.id,
+        plan_type: planType,
+        status: 'active',
+        start_date: new Date().toISOString(),
+        end_date: planType === 'annual' 
+          ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() 
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        stripe_customer_id: session.customer?.toString() || '',
+        stripe_subscription_id: stripeSubscriptionId,
+        stripe_price_id: stripePriceId,
+      }, {
+        onConflict: 'user_id',
+        returning: 'minimal',
+      })
+
+    if (subscriptionError) {
+      console.error("Error creating subscription record:", subscriptionError)
+      return new Response(JSON.stringify({ error: "Failed to create subscription record" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      })
+    }
+
+    console.log(`Successfully verified and created subscription for user: ${user.id}, plan: ${planType}`)
+
+    // Return success
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ 
+        success: true,
+        subscription: {
+          id: session.id,
+          planType: planType,
+          status: 'active',
+        }
+      }),
       {
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       }
     )
@@ -126,7 +147,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ error: error.message }),
       {
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500,
       }
     )
